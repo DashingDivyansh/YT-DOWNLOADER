@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YT Downloader Pro</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-effect"></div>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1 class="logo glow-text">YT <span>Downloader Pro</span></h1>
+            <p class="subtitle">Fast, parallel, premium downloads.</p>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="search-box glass-panel">
+            <input type="text" id="urlInput" placeholder="Paste YouTube Video or Playlist URL here..." />
+            <button id="fetchBtn" class="btn-primary">
+                <span id="fetchBtnText">Fetch</span>
+                <div class="spinner hidden" id="fetchSpinner"></div>
+            </button>
+        </div>
+
+        <!-- Error Toast Container -->
+        <div id="toastContainer" class="toast-container"></div>
+
+        <!-- Main Content Area -->
+        <div id="contentArea" class="content-area hidden">
+            <!-- Playlist Header -->
+            <div class="action-bar glass-panel">
+                <div class="playlist-info">
+                    <h2 id="playlistTitle">Playlist Title</h2>
+                    <span class="badge" id="selectionBadge">0 / 0 Selected</span>
+                </div>
+                <div class="controls">
+                    <button id="selectAllBtn" class="btn-secondary">Select All</button>
+                    <button id="repairBtn" class="btn-secondary hidden">Repair Playlist</button>
+                    
+                    <div class="settings-group">
+                        <label for="qualitySelect">Quality:</label>
+                        <select id="qualitySelect" class="dropdown">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div class="settings-group">
+                        <label for="concurrentSelect" title="Parallel downloads">Concurrency:</label>
+                        <select id="concurrentSelect" class="dropdown">
+                            <option value="1">1x</option>
+                            <option value="2">2x</option>
+                            <option value="3" selected>3x</option>
+                            <option value="4">4x</option>
+                            <option value="5">5x</option>
+                        </select>
+                    </div>
+
+                    <button id="downloadBtn" class="btn-primary pulse">Download</button>
+                </div>
+            </div>
+
+            <!-- Overall Progress bar -->
+            <div id="overallProgressContainer" class="overall-progress-container hidden glass-panel">
+                <h3 id="overallProgressText">Downloading 0 of 0...</h3>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill overall-fill" id="overallProgressBar"></div>
+                </div>
+            </div>
+
+            <!-- Video Grid -->
+            <div id="videoGrid" class="video-grid">
+                <!-- Video Cards injected here -->
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

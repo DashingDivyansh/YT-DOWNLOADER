@@ -1,0 +1,97 @@
+Here’s a thorough tester analysis of youtube.py, focusing on your three target areas plus several cross‑cutting concerns I discovered.
+
+1. Thread Safety & Async Integration
+✅ What works well
+Pattern is correct: start_download_task obtains the running loop in the async context and passes it to worker threads, which use asyncio.run_coroutine_threadsafe to push SSE updates.
+
+Pool usage is clean: Both fetch_metadata and start_download_task use with blocks to properly shut down executors.
+
+No obvious race on final_filename: The download hooks run sequentially in the same worker thread, so the nonlocal variable is modified safely.
+
+⚠️ Issues & Risks
+Issue	Severity	Detail
+Unprotected SSE calls inside hooks	High	sse_manager.publish is called from progress_hook, postprocessor_hook, and the final “done” / “error” blocks. If publish raises an exception (e.g., session deleted, queue full, internal error), it will propagate out of the hook, potentially crashing the entire download. yt-dlp does not expect exceptions from progress hooks; this may abort the download without proper cleanup.
+Same risk in the final message blocks	Medium	Even outside hooks, the publish call after download completion / error could fail. Right now the exception would leave start_download_task hanging or cause an unhandled exception in the thread pool.
+start_download_task may not call complete_session if any future raises	Low	download_video_sync catches Exception, so the future normally resolves without error. However, if an uncaught error occurs (like a BaseException from a crashing library), the future will raise and asyncio.gather will re-raise it before complete_session runs. This would leave the session open on the frontend. Recommendation: use asyncio.gather(*futures, return_exceptions=True) and then call complete_session.
+Dependency on sse_manager being thread‑safe	Assumption	The code assumes sse_manager.publish can be called from arbitrary threads. This must be verified in sse_manager.py – if it uses an asyncio.Queue without a thread‑safe wrapper, concurrent calls from multiple threads could corrupt the queue or miss messages.
+🔧 Recommended fixes
+Wrap all calls to sse_manager.publish in a try…except block and log failures. Never let an exception leak out of a hook or final message section.
+
+Change start_download_task to:
+
+python
+results = await asyncio.gather(*futures, return_exceptions=True)
+# optionally log any exceptions here
+sse_manager.complete_session(session_id)
+Document that sse_manager must be thread‑safe, or provide a thread‑safe wrapper.
+
+2. Download Hooks – Robustness & Edge Cases
+✅ What works well
+ANSI stripping is done via a proper regex and a dedicated strip_ansi function.
+
+Percentage parsing gracefully falls back to 0.0 on any non‑numeric input.
+
+The dual‑hook approach (progress_hook for raw download filename, postprocessor_hook for the final processed file) is the correct pattern for yt‑dlp.
+
+⚠️ Issues & Edge Cases
+Issue	Severity	Detail
+progress_hook does not handle 'error' status	Medium	yt‑dlp may call the progress hook with status == 'error' before raising an exception. The hook currently ignores this status. You could lose an opportunity to send detailed error information to the UI earlier (e.g., “video unavailable”, “age‑restricted”).
+postprocessor_hook may not always set final_filename	Medium	The hook relies on info_dict.get('filepath') or info_dict.get('filename'). If neither key exists (possible with certain post‑processors), final_filename stays at the raw download filename (which may be a part‑file like .f247.webm that gets deleted after merging). In that case the “done” message would send a wrong or non‑existent filename.
+Filename collisions / unsafe characters	Medium	The output template %(title)s.%(ext)s does not enable filename sanitisation (restrictfilenames). On Windows or if a video title contains characters like :, ?, \, the download may fail with an OS error.
+merge_output_format = 'mp4' may conflict with source formats	Low	When the best video stream is WebM/VP9 and best audio is Opus, forcing a merge to MP4 can fail or produce a broken file. yt‑dlp may output a container mismatch warning but might still attempt the merge. Consider using 'mkv' as a more universal container, or let yt‑dlp decide automatically.
+Progress hook volume	Performance	The hook sends an SSE message on every progress update (multiple times per second). If multiple videos are downloading concurrently, this could flood the SSE stream and cause client‑side backpressure. Consider throttling updates (e.g., only send if percentage changed by ≥1% or time since last update >500ms).
+Default _percent_str fallback is '0.0%'	Low	If yt‑dlp never supplies _percent_str (unlikely), the hook would send 0.0% indefinitely. Better to use 'N/A' as default and let the frontend handle it? The current behaviour is acceptable but could cause confusion if the download stalls.
+🔧 Recommended fixes
+In progress_hook, add a branch for d['status'] == 'error' to push a detailed error message immediately.
+
+After the ydl.download() call in download_video_sync, validate that final_filename points to an actual existing file; if not, attempt to locate the output using ydl.prepare_filename or the info_dict from the download call.
+(Hint: you can capture the info_dict by using the postprocessor_hook’s info_dict or by storing the result of ydl.extract_info before download and checking info['filepath'] afterwards.)
+
+Add 'restrictfilenames': True to ydl_opts to avoid filesystem errors.
+
+Reconsider hard‑coded mp4 – let yt‑dlp choose the merge container by removing merge_output_format or using 'mkv'.
+
+Implement rate‑limiting in the progress hook (e.g., with a simple time‑stamp check).
+
+3. Error Handling & SSE Broadcasting
+✅ What works well
+The main download function wraps the entire operation in a try…except Exception, which should catch most yt‑dlp errors (network, extraction, post‑processing).
+
+Error messages are sent to the frontend via the same SSE channel, so the UI can react accordingly.
+
+Even if the error occurs very early (before any hook), the final except block still fires an error event.
+
+⚠️ Issues & Risks
+Issue	Severity	Detail
+except Exception catches too much but also misses some	Medium	BaseException subclasses like SystemExit or KeyboardInterrupt (or a user‑generated shutdown signal) would propagate out and break the whole pipeline. While rare, a more robust pattern is to catch Exception in the try and add a separate finally block that ensures an SSE message is sent if the function crashes unexpectedly.
+Error message is a bare str(e)	Low	The frontend receives only str(e), which may be a cryptic multi‑line traceback. Consider extracting a short, user‑friendly message (e.g., “Download failed: HTTP Error 403”) and logging the full traceback server‑side.
+No error reported if sse_manager.publish fails	High	As mentioned earlier, a failure in publish inside the except block will obscure the original error and may leave the session in an inconsistent state.
+Metadata fetch error handling	Medium	fetch_metadata_sync does not catch exceptions; if ydl.extract_info raises (e.g., invalid URL, geo‑restriction), the exception will propagate through the thread pool to the async caller and crash the endpoint. The caller (not shown) needs proper exception handling, but the function itself should at least log and re‑raise a custom application error.
+🔧 Recommended fixes
+Wrap the publish calls in the error path and in hooks with try/except, ensuring that the download can still finish with a local file and that the core error is logged.
+
+In the final error block, send a structured error with a short “reason” and optionally a “detail” field. Keep the original traceback for server‑side logs.
+
+Consider a finally block in download_video_sync that broadcasts a terminal message only if no “done” or “error” message was already sent (to handle unexpected crashes).
+
+Add exception handling in fetch_metadata_sync (e.g., catch yt_dlp.utils.DownloadError and return a well‑formed error response, or raise a custom exception).
+
+Additional Findings (Beyond the Core Trio)
+Observation	Impact	Recommendation
+No cancellation/task‑tracking	If a user closes the browser, downloads continue to completion wastefully.	Store a dictionary of active session_id → download tasks and allow cancellation.
+DOWNLOAD_DIR created at import time	Fine, but could fail silently if permissions are wrong.	Consider creating the directory lazily inside start_download_task and checking for errors.
+get_format_string doesn’t handle “Best Available” explicitly	Works because quality_map.get returns the default.	Document that “Best Available” is not a key; might confuse future maintainers.
+Thumbnail URL hard‑coded	The URL hqdefault.jpg is safe but low‑res. yt‑dlp provides thumbnail in the info dict.	Use entry.get('thumbnail', default_url) for higher quality.
+Inconsistent use of QUALITIES	The constant is defined but never used in the download logic; it’s only sent to the frontend.	Ensure the frontend and backend stay in sync; consider deriving the format map from a master config.
+Suggested Order of Priority (What to fix first)
+Wrap all SSE publish calls in try/except to prevent hook‑induced crashes (critical for stability).
+
+Fix the start_download_task session‑complete call so the frontend always receives a terminal event, even if a download future unexpectedly fails.
+
+Add restrictfilenames=True to avoid filesystem errors across platforms.
+
+Review the postprocessor_hook logic to guarantee the final filename is correct (validate file existence, fallback to info_dict from download).
+
+Add hook error handling (status == 'error') for richer user feedback.
+
+Once youtube.py is hardened, you should proceed to test sse_manager.py (as you planned) with an emphasis on thread‑safety and queue memory management, and then app.js to verify that the frontend handles multiple concurrent progress bars and robust error states gracefully.
