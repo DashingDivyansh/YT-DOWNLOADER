@@ -3,79 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YT Downloader Pro</title>
+    <title>YT Downloader Pro — Fast, Parallel, Premium Downloads</title>
+    <meta name="description" content="Download YouTube videos and entire playlists with quality control, parallel downloads, and real-time progress tracking.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="background-effect"></div>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <h1 class="logo glow-text">YT <span>Downloader Pro</span></h1>
-            <p class="subtitle">Fast, parallel, premium downloads.</p>
+
+    <!-- Animated Background -->
+    <div class="bg-orbs" aria-hidden="true">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <!-- Toast Notification Area -->
+    <div id="toastContainer" class="toast-container" role="alert" aria-live="polite"></div>
+
+    <div class="app-wrapper">
+
+        <!-- ===== HEADER ===== -->
+        <header class="app-header">
+            <div class="logo-group">
+                <div class="logo-icon" aria-hidden="true">
+                    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="36" height="36" rx="10" fill="url(#logoGrad)"/>
+                        <path d="M14 11.5L25 18L14 24.5V11.5Z" fill="white"/>
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#8b5cf6"/>
+                                <stop offset="1" stop-color="#06b6d4"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="logo-title">YT<span>Downloader</span><em>Pro</em></h1>
+                    <p class="logo-sub">Fast · Parallel · Premium Quality</p>
+                </div>
+            </div>
+            <div class="header-badges">
+                <span class="pill pill-purple">yt-dlp Powered</span>
+                <span class="pill pill-cyan">SSE Live Progress</span>
+                <span class="pill pill-green">ffmpeg Ready</span>
+            </div>
         </header>
 
-        <!-- Search Bar -->
-        <div class="search-box glass-panel">
-            <input type="text" id="urlInput" placeholder="Paste YouTube Video or Playlist URL here..." />
-            <button id="fetchBtn" class="btn-primary">
-                <span id="fetchBtnText">Fetch</span>
-                <div class="spinner hidden" id="fetchSpinner"></div>
-            </button>
-        </div>
-
-        <!-- Error Toast Container -->
-        <div id="toastContainer" class="toast-container"></div>
-
-        <!-- Main Content Area -->
-        <div id="contentArea" class="content-area hidden">
-            <!-- Playlist Header -->
-            <div class="action-bar glass-panel">
-                <div class="playlist-info">
-                    <h2 id="playlistTitle">Playlist Title</h2>
-                    <span class="badge" id="selectionBadge">0 / 0 Selected</span>
+        <!-- ===== URL INPUT SECTION ===== -->
+        <section class="url-section glass-card" aria-label="URL input">
+            <div class="url-input-wrapper">
+                <div class="url-icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 </div>
-                <div class="controls">
-                    <button id="selectAllBtn" class="btn-secondary">Select All</button>
-                    <button id="repairBtn" class="btn-secondary hidden">Repair Playlist</button>
-                    
-                    <div class="settings-group">
-                        <label for="qualitySelect">Quality:</label>
-                        <select id="qualitySelect" class="dropdown">
-                            <!-- Populated dynamically -->
-                        </select>
+                <input
+                    type="url"
+                    id="urlInput"
+                    class="url-input"
+                    placeholder="Paste YouTube video or playlist URL…"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="YouTube URL"
+                />
+                <button id="fetchBtn" class="btn btn-primary fetch-btn" aria-label="Fetch video metadata">
+                    <span id="fetchBtnText">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        Fetch
+                    </span>
+                    <span id="fetchSpinner" class="btn-spinner hidden" aria-hidden="true"></span>
+                </button>
+            </div>
+            <p class="url-hint">Supports: single videos, playlists, short links (youtu.be)</p>
+        </section>
+
+        <!-- ===== MAIN CONTENT (hidden until fetch) ===== -->
+        <main id="contentArea" class="content-area hidden" aria-label="Results">
+
+            <!-- ACTION BAR -->
+            <section class="action-bar glass-card" aria-label="Download controls">
+                <div class="action-bar-top">
+                    <div class="media-info">
+                        <div id="typeTag" class="type-tag">VIDEO</div>
+                        <div>
+                            <h2 id="playlistTitle" class="media-title">Video Title</h2>
+                            <span id="selectionBadge" class="selection-badge">0 / 0 selected</span>
+                        </div>
+                    </div>
+                    <div class="action-buttons-row">
+                        <button id="selectAllBtn" class="btn btn-ghost hidden" aria-label="Toggle select all">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                            Select All
+                        </button>
+                        <button id="repairBtn" class="btn btn-ghost hidden" aria-label="Repair/re-verify playlist">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                            Repair Playlist
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <!-- Quality -->
+                    <div class="setting-block">
+                        <label class="setting-label" for="qualitySelect">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                            Quality
+                        </label>
+                        <div class="select-wrapper">
+                            <select id="qualitySelect" class="styled-select" aria-label="Video quality">
+                                <!-- populated dynamically -->
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="settings-group">
-                        <label for="concurrentSelect" title="Parallel downloads">Concurrency:</label>
-                        <select id="concurrentSelect" class="dropdown">
-                            <option value="1">1x</option>
-                            <option value="2">2x</option>
-                            <option value="3" selected>3x</option>
-                            <option value="4">4x</option>
-                            <option value="5">5x</option>
-                        </select>
+                    <!-- Concurrency -->
+                    <div class="setting-block">
+                        <label class="setting-label" for="concurrentSelect">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="8" width="5" height="13" rx="1"/><rect x="17" y="5" width="5" height="16" rx="1"/></svg>
+                            Parallel Workers
+                        </label>
+                        <div class="concurrency-control">
+                            <input type="range" id="concurrentSlider" class="slider" min="1" max="5" value="3" aria-label="Number of parallel downloads" aria-valuemin="1" aria-valuemax="5" aria-valuenow="3">
+                            <span id="concurrentValue" class="concurrency-value">3×</span>
+                            <!-- Hidden select for actual value submission -->
+                            <select id="concurrentSelect" class="hidden" aria-hidden="true">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <button id="downloadBtn" class="btn-primary pulse">Download</button>
+                    <!-- Download CTA -->
+                    <div class="setting-block setting-block-cta">
+                        <button id="downloadBtn" class="btn btn-primary btn-download" disabled aria-label="Start download">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- OVERALL PROGRESS BAR -->
+            <div id="overallProgressContainer" class="overall-progress glass-card hidden" role="status" aria-live="polite">
+                <div class="overall-header">
+                    <div class="overall-icon">⚡</div>
+                    <div>
+                        <p id="overallProgressText" class="overall-text">Preparing downloads…</p>
+                        <p class="overall-sub">Downloads are saved locally on your machine</p>
+                    </div>
+                    <span id="overallPercent" class="overall-percent">0%</span>
+                </div>
+                <div class="overall-bar-track">
+                    <div id="overallProgressBar" class="overall-bar-fill"></div>
                 </div>
             </div>
 
-            <!-- Overall Progress bar -->
-            <div id="overallProgressContainer" class="overall-progress-container hidden glass-panel">
-                <h3 id="overallProgressText">Downloading 0 of 0...</h3>
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill overall-fill" id="overallProgressBar"></div>
-                </div>
+            <!-- VIDEO GRID -->
+            <div id="videoGrid" class="video-grid" role="list" aria-label="Videos">
+                <!-- Video cards injected by app.js -->
             </div>
 
-            <!-- Video Grid -->
-            <div id="videoGrid" class="video-grid">
-                <!-- Video Cards injected here -->
-            </div>
-        </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="app-footer">
+            <p>Powered by <strong>yt-dlp</strong>, <strong>FastAPI</strong> &amp; <strong>ffmpeg</strong> · Files saved to <code>downloads/</code></p>
+        </footer>
+
     </div>
+
     <script src="app.js"></script>
 </body>
 </html>
